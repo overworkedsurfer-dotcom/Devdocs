@@ -1,177 +1,181 @@
-# devdocs-mcp
+# docshelf
 
-A local [DevDocs](https://devdocs.io) clone, served as an [MCP](https://modelcontextprotocol.io) server. Your AI assistant gets fast, offline search and reading across the API docs for hundreds of languages, frameworks and libraries: Python, JavaScript, React, Rust, Go, PostgreSQL and many more.
+Your own knowledge folder, searchable by your AI assistant over [MCP](https://modelcontextprotocol.io).
 
-It uses the same data and search ranking as devdocs.io. Docs are downloaded once into a local SQLite database and served from there.
+- **Your files:** notes and documents you keep in a folder (Markdown, text, HTML, PDF).
+- **Pages you read:** a Chrome extension saves pages to the folder as you browse, only on the sites you switch it on for.
+- **Whole sites:** a crawler saves a docs site in one go.
+
+Your assistant searches and reads that folder, and nothing else. Everything is plain Markdown files on your disk, so you can open, edit, grep or git them like any other file.
+
+```
+Chrome extension ── pages you browse, on sites you choose ──┐
+Crawler ─────────── whole sites ────────────────────────────┤──▶  ~/knowledge/web/<site>/<page>.md
+You ─────────────── notes, docs, PDFs ──────────────────────┘     ~/knowledge/**/*.md .txt .html .pdf
+                                                                          │
+AI assistant ◀── MCP: search · read · list_files · crawl_site ── docshelf ┘
+```
 
 ## Quick start
 
-Pick one:
-
-**uv** (needs [uv](https://docs.astral.sh/uv/)):
+**1. Start the server.** It serves `~/knowledge`; set `KNOWLEDGE=/path/to/folder` to use another folder.
 
 ```sh
-make setup                                  # uv sync
-make install-docs DOCS="python javascript"  # optional: docs are also fetched on first use
-make serve-http                             # http://localhost:8000/mcp
+make up              # Docker: http://localhost:8000/mcp
+# or
+make setup           # uv
+make serve-http
 ```
 
-**Docker:**
+**2. Install the extension.**
+1. Open `chrome://extensions` and turn on **Developer mode**.
+2. Click **Load unpacked** and pick this repo's `extension/` folder.
+3. Click the docshelf icon. Under **Server**, enter the address (`http://localhost:8000`, or your server's LAN IP; see below) and the token from `make docker-token` (Docker) or `make token` (uv). Click **Save**; it should say **Connected**.
+
+**3. Turn on auto-send.** On a site you want to keep, click the icon and switch on **Auto-send pages from this site**. From then on, every page you open there is saved. The icon briefly shows ✓ when a page is saved.
+
+**4. Connect your AI client** (next section).
+
+## Connect an AI client
+
+**Claude Code:**
 
 ```sh
-make up PRELOAD="python javascript"         # build + run at http://localhost:8000/mcp
+claude mcp add --transport http docshelf http://localhost:8000/mcp
 ```
 
-**Without make:**
-
-```sh
-uv run devdocs-mcp                                          # stdio
-uv run devdocs-mcp serve --transport http --port 8000       # http://localhost:8000/mcp
-
-docker build -t devdocs-mcp .
-docker run -d --name devdocs-mcp -p 127.0.0.1:8000:8000 -v devdocs-mcp-data:/data devdocs-mcp
-```
-
-**Without cloning:**
-
-```sh
-uvx --from git+https://github.com/overworkedsurfer-dotcom/Devdocs devdocs-mcp
-```
-
-Run `make` to list every target.
-
-## Connect a client
-
-### Claude Code
-
-```sh
-# The server over HTTP (make serve-http or make up)
-claude mcp add --transport http devdocs http://localhost:8000/mcp
-
-# Or let Claude Code launch it over stdio
-claude mcp add devdocs -- uv run --quiet --directory /path/to/Devdocs devdocs-mcp
-```
-
-### Claude Desktop
-
-In `claude_desktop_config.json`:
+**Claude Desktop** (`claude_desktop_config.json`). Desktop launches the server itself, so it doesn't need `make up`:
 
 ```json
 {
   "mcpServers": {
-    "devdocs": {
+    "docshelf": {
       "command": "uv",
-      "args": ["run", "--quiet", "--directory", "/path/to/Devdocs", "devdocs-mcp"]
+      "args": ["run", "--quiet", "--directory", "/path/to/this/repo", "docshelf"],
+      "env": { "DOCSHELF_DIR": "/Users/you/knowledge" }
     }
   }
 }
 ```
 
-If Claude Desktop can't find `uv`, use its full path (`which uv`). To run it in Docker instead:
+If Claude Desktop can't find `uv`, use its full path (`which uv`).
 
-```json
-{
-  "mcpServers": {
-    "devdocs": {
-      "command": "docker",
-      "args": ["run", "-i", "--rm", "-v", "devdocs-mcp-data:/data",
-               "devdocs-mcp", "serve", "--transport", "stdio"]
-    }
-  }
-}
-```
+**Cursor, VS Code and other HTTP clients:** use the URL `http://localhost:8000/mcp`.
 
-### Cursor, VS Code and other HTTP clients
+## Using it across your network
 
-Point the client at `http://localhost:8000/mcp`:
-
-```jsonc
-// Cursor: ~/.cursor/mcp.json
-{ "mcpServers": { "devdocs": { "url": "http://localhost:8000/mcp" } } }
-
-// VS Code: .vscode/mcp.json
-{ "servers": { "devdocs": { "type": "http", "url": "http://localhost:8000/mcp" } } }
-```
-
-## Tools
-
-| Tool | What it does |
-| --- | --- |
-| `search_docs` | Search entries (functions, classes, methods, guides) by name, ranked like devdocs.io: exact matches first, then fuzzy ones (`ospj` finds `os.path.join()`). |
-| `read_page` | Read a page as Markdown. A `#fragment` path (`library/os#os.getcwd`) returns just that entry's section. Long pages come back in chunks. |
-| `search_content` | Full-text search of page contents, for when you don't know the API name. Covers docs installed offline, plus pages already read. |
-| `list_entries` | Browse a doc's table of contents, like the devdocs.io sidebar. |
-| `list_docs` | List what DevDocs offers and what's installed. |
-| `install_docs` | Download docs for offline use, or update ones DevDocs has rebuilt. |
-| `remove_docs` | Delete installed docs. |
-
-Docs can be named by slug (`python~3.12`), by name (`python`, which picks the installed version or else the newest), by alias (`js`, `py`, `ts`), or by name and version (`python 3.11`).
-
-A doc that isn't installed yet is fetched the first time a tool names it. That fetch gets only its index, which is small: pages are downloaded as they're read, then cached. `install_docs` (or `make install-docs`) downloads every page instead, so the doc works fully offline and `search_content` covers all of it.
-
-## Command line
-
-The same features work from a shell, which is handy for scripts and for checking what the model will see:
+To send pages from a browser on another machine, the server has to listen on your LAN:
 
 ```sh
-devdocs-mcp catalog python             # list available docs and versions
-devdocs-mcp install python~3.12 react  # download for offline use (--index-only for just the index)
-devdocs-mcp list                       # list installed docs
-devdocs-mcp search getcwd -d python    # name search
-devdocs-mcp fulltext "context manager" # full-text search
-devdocs-mcp read python library/os#os.getcwd
-devdocs-mcp entries python os.path     # browse a section
-devdocs-mcp update                     # update docs DevDocs has rebuilt
-devdocs-mcp remove react
+make up BIND=0.0.0.0           # Docker
+make serve-http HOST=0.0.0.0   # uv
 ```
 
-Prefix these with `uv run` inside the repo, or run them in Docker with `docker run --rm -v devdocs-mcp-data:/data devdocs-mcp <command>`.
+Then put `http://<server's LAN IP>:8000` in the extension.
+
+The extension's API (`/api`) always requires the token. The MCP endpoint (`/mcp`) has no login, so anyone on your network can search your folder through it. Only do this on a network you trust.
+
+## What the AI can do
+
+| Tool | |
+| --- | --- |
+| `search` | Find sections by their words; headings and titles count most. Results are paths like `notes/deploy.md#rolling-back`. |
+| `read` | Read a file as Markdown, or just one section with `#anchor`. A saved page can also be read by its original URL. Long files come in chunks. |
+| `list_files` | Browse the folders. |
+| `crawl_site` | Save a website into the folder, in the background. |
+| `crawl_status` | Check on crawls. |
+
+The assistant only sees your folder. Nothing is looked up online, except when it crawls a site you asked for.
+
+## The knowledge folder
+
+- **What's read:** `.md`, `.markdown`, `.mdx`, `.txt`, `.rst`, `.adoc`, `.html`, `.htm` and `.pdf`, in any subfolder.
+- **What's skipped:** hidden folders (like `.git` or `.obsidian`) and `node_modules`.
+- **Changes are picked up automatically.** Add, edit or delete files any way you like, and searches notice within a couple of seconds.
+- **Where saved pages go:** browser and crawler pages land in `web/<site>/<path>.md`. Each one has a small header recording its title, source URL and the time it was saved:
+
+  ```markdown
+  ---
+  title: "useState – React"
+  source: https://react.dev/reference/react/useState
+  saved: 2026-10-09T20:22:23Z
+  via: browser
+  ---
+  # useState
+  ...
+  ```
+
+  Saving a page again only rewrites the file if its content changed. If you edit a saved page by hand, the next save of that page overwrites your edits.
+- **The search index:** it lives in `.docshelf/` inside the folder, ignored by git. It's only a cache: `make reindex` rebuilds it, and deleting it loses nothing. In Docker it's kept in a volume instead.
+
+## The extension
+
+- **Auto-send** works only on sites you switch on, and asks Chrome for access to each site when you do.
+  - It waits for a page to finish loading before sending it.
+  - On app-style sites that change pages without reloading, it sends each new page too.
+  - Pages without readable text, like login screens, aren't saved.
+  - The icon shows ✓ when a page is saved, – when it's skipped, and ! on an error. Hover over it for details.
+- **Send this page** saves the current page once, on any site.
+- **Crawl site on server** has the server fetch the rest of the site.
+  - The server can't use your browser's logins or run JavaScript.
+  - For sites behind a login, or apps that build pages with JavaScript, use auto-send while you browse instead.
+- **Your data:** pages go only to the server address you entered, and the extension sends nothing anywhere else.
+
+## Crawling
+
+```sh
+make crawl URL=https://docs.example.com/guide/
+docshelf crawl https://wiki.internal/docs/ --max-pages 500 -H "Cookie: session=..."
+```
+
+- **Scope:** a crawl follows links that stay under the start page's folder. Change that with `--prefix`, `--include` or `--exclude`.
+- **robots.txt** is respected unless you pass `--ignore-robots`.
+- **Logins:** `-H` adds headers, such as a session cookie for internal sites. Headers are only ever sent to that site.
 
 ## Configuration
 
-These environment variables apply everywhere. The Docker image sets the ones marked.
-
 | Variable | Default | |
 | --- | --- | --- |
-| `DEVDOCS_DATA_DIR` | `~/.local/share/devdocs-mcp` (Docker: `/data`) | Where the database lives |
-| `DEVDOCS_TRANSPORT` | `stdio` (Docker: `http`) | `stdio`, `http` or `sse` |
-| `DEVDOCS_HOST` | `127.0.0.1` (Docker: `0.0.0.0`) | HTTP bind address |
-| `DEVDOCS_PORT` | `8000` | HTTP port |
-| `DEVDOCS_PRELOAD` | | Docs to install in the background at startup, e.g. `python,javascript` |
-| `DEVDOCS_AUTO_INSTALL` | `true` | Fetch a doc's index the first time a tool names it |
-| `DEVDOCS_CATALOG_TTL_HOURS` | `24` | How long to cache the DevDocs catalog |
-| `DEVDOCS_MANIFEST_URL` | `https://devdocs.io/docs.json` | Catalog URL |
-| `DEVDOCS_DOCUMENTS_URL` | `https://documents.devdocs.io` | Where doc indexes and pages are downloaded from |
+| `DOCSHELF_DIR` | `~/knowledge` (Docker: `/knowledge`) | The knowledge folder |
+| `DOCSHELF_INDEX_DIR` | `<folder>/.docshelf` (Docker: `/data`) | Search index and token |
+| `DOCSHELF_TOKEN` | generated, kept in the index dir | Token for the extension's API |
+| `DOCSHELF_WEB_FOLDER` | `web` | Subfolder for saved pages |
+| `DOCSHELF_TRANSPORT` | `stdio` (Docker: `http`) | `stdio`, `http` or `sse` |
+| `DOCSHELF_HOST` | `127.0.0.1` (Docker: `0.0.0.0`) | HTTP bind address |
+| `DOCSHELF_PORT` | `8000` | HTTP port |
 
-### Docker notes
+The Makefile takes `KNOWLEDGE`, `PORT`, `HOST` (uv), `BIND` (Docker) and `TOKEN`. Run `make` to list every target.
 
-- Docs persist in the `devdocs-mcp-data` volume, so container rebuilds keep them.
-- `make up` publishes the port on `127.0.0.1` only. The server has no authentication, so don't expose it beyond machines you trust.
-- To ship docs inside the image, bake them in: `make docker-build BAKE="python javascript"`. A new volume starts out with the baked docs.
+## Command line
 
-## How it works
+```sh
+docshelf serve --transport http   # serve over HTTP (default: stdio)
+docshelf token                    # the extension's token
+docshelf search "rolling back"    # search, exactly as the assistant sees it
+docshelf read notes/deploy.md#rolling-back
+docshelf ls web
+docshelf crawl https://docs.example.com/
+docshelf reindex
+```
 
-- **Data:** the same files the devdocs.io web app downloads:
-  - `docs.json`, the catalog
-  - `<slug>/index.json`, each doc's entries and sections
-  - `<slug>/db.json`, every page
-  - `<slug>/<path>.html`, a single page
-- **Storage:** one SQLite file (WAL mode) holds the catalog, entry indexes and pages, plus an FTS5 index for full-text search.
-- **Search:** a port of DevDocs' own `searcher.js`, so results rank the way they do on devdocs.io.
-- **Rendering:** page HTML becomes Markdown.
-  - Links are rewritten to doc-relative paths that `read_page` accepts.
-  - Code blocks keep their language.
-  - A `#fragment` narrows the page to the heading or `<dt>` definition that documents it.
+Inside the repo, run these with `uv run docshelf ...`.
+
+## HTTP API
+
+This is what the extension uses. Every `/api` route needs `Authorization: Bearer <token>`.
+
+| Route | |
+| --- | --- |
+| `GET /health` | No token needed |
+| `GET /api/status` | Version and file count |
+| `POST /api/pages` | `{"url", "html", "title"?}` saves a page |
+| `POST /api/crawl` | `{"url", "max_pages"?, "prefix"?, "headers"?}` starts a crawl |
+| `GET /api/crawl`, `GET /api/crawl/{id}` | Crawl progress |
+| `DELETE /api/crawl/{id}` | Cancel a crawl |
 
 ## Development
 
 ```sh
-make test     # pytest, against a fake DevDocs (no network needed)
-make lint     # ruff
-make format
-make inspector  # poke at the tools in the MCP Inspector (needs Node.js)
+make test   # pytest
+make lint   # ruff
 ```
-
-## Credits
-
-Documentation content comes from [DevDocs](https://github.com/freeCodeCamp/devdocs) and, through it, from each project's own docs, under their respective licenses. `src/devdocs_mcp/search.py` is a port of DevDocs' search algorithm and stays under the Mozilla Public License 2.0, like the original.

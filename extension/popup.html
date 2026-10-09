@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>docshelf</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header>
+      <strong>docshelf</strong>
+      <span id="connection" class="pill">Checking…</span>
+    </header>
+
+    <section id="page">
+      <div id="site" class="site">This page can't be saved</div>
+      <label class="switch">
+        <input type="checkbox" id="auto" disabled />
+        <span>Auto-send pages from this site</span>
+      </label>
+      <div class="row">
+        <button id="send" disabled>Send this page</button>
+        <button id="crawl" class="secondary" disabled>Crawl site on server</button>
+      </div>
+      <p id="result" class="result" role="status"></p>
+    </section>
+
+    <details id="server-settings">
+      <summary>Server</summary>
+      <label>Address <input id="server" placeholder="http://192.168.1.20:8000" spellcheck="false" /></label>
+      <label>Token <input id="token" type="password" placeholder="from: make token" spellcheck="false" /></label>
+      <div class="row"><button id="save">Save</button></div>
+      <p class="hint">Get the token on the server with <code>make token</code> or <code>docshelf token</code>.</p>
+    </details>
+
+    <details id="site-list">
+      <summary>Auto-send sites (<span id="site-count">0</span>)</summary>
+      <ul id="sites"></ul>
+    </details>
+
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>

@@ -1,19 +1,20 @@
 [project]
-name = "devdocs-mcp"
-version = "0.1.0"
-description = "A local DevDocs clone exposed as an MCP server: search and read API documentation for hundreds of languages and libraries, offline."
+name = "docshelf"
+version = "0.2.0"
+description = "Your knowledge folder (notes, docs, and web pages saved from your browser) searchable by AI assistants over MCP."
 readme = "README.md"
 requires-python = ">=3.10"
-keywords = ["mcp", "devdocs", "documentation", "model-context-protocol"]
+keywords = ["mcp", "knowledge-base", "documentation", "search", "model-context-protocol"]
 dependencies = [
     "mcp>=2.3,<3",
     "httpx2>=2.10",
     "beautifulsoup4>=4.12",
     "markdownify>=1.0",
+    "pypdf>=5",
 ]
 
 [project.scripts]
-devdocs-mcp = "devdocs_mcp.cli:main"
+docshelf = "docshelf.cli:main"
 
 [dependency-groups]
 dev = [
@@ -26,7 +27,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/devdocs_mcp"]
+packages = ["src/docshelf"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -39,4 +40,4 @@ target-version = "py310"
 select = ["E", "F", "I", "UP", "B"]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/conftest.py" = ["E501"]  # HTML fixtures
+"tests/*" = ["E501"]  # HTML and Markdown fixtures

@@ -1,4 +1,4 @@
-from devdocs_mcp.cli import main
+from docshelf.cli import main
 
 if __name__ == "__main__":
     raise SystemExit(main())

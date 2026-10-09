@@ -18,24 +18,22 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 # ---- runtime ----
 FROM ${PYTHON_IMAGE}
-RUN useradd --create-home --uid 1000 devdocs \
-    && mkdir /data \
-    && chown devdocs /data
+# /knowledge is your folder (bind-mount it); /data holds the search index and
+# token (a volume). Both are writable by any user, so the container can run
+# as your own user and save pages that you own.
+RUN useradd --create-home --uid 1000 docshelf \
+    && mkdir /knowledge /data \
+    && chmod 0777 /knowledge /data
 COPY --from=build /app/.venv /app/.venv
 ENV PATH=/app/.venv/bin:$PATH \
     PYTHONUNBUFFERED=1 \
-    DEVDOCS_DATA_DIR=/data \
-    DEVDOCS_TRANSPORT=http \
-    DEVDOCS_HOST=0.0.0.0 \
-    DEVDOCS_PORT=8000
-USER devdocs
-
-# Optionally bake docs into the image: docker build --build-arg DOCS="python javascript" .
-# A new named volume mounted at /data starts out with whatever was baked in.
-ARG DOCS=""
-RUN if [ -n "$DOCS" ]; then devdocs-mcp install $DOCS; fi
-
+    DOCSHELF_DIR=/knowledge \
+    DOCSHELF_INDEX_DIR=/data \
+    DOCSHELF_TRANSPORT=http \
+    DOCSHELF_HOST=0.0.0.0 \
+    DOCSHELF_PORT=8000
+USER docshelf
 VOLUME /data
 EXPOSE 8000
-ENTRYPOINT ["devdocs-mcp"]
+ENTRYPOINT ["docshelf"]
 CMD ["serve"]

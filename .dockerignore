@@ -1,9 +1,9 @@
 .git
 .venv
-.data
 .pytest_cache
 .ruff_cache
 **/__pycache__
+extension
 tests
 Makefile
 Dockerfile

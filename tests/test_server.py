@@ -1,7 +1,8 @@
 import pytest
+from conftest import write
 from mcp import Client
 
-from devdocs_mcp.server import create_server
+from docshelf.server import create_server
 
 pytestmark = pytest.mark.anyio
 
@@ -11,111 +12,58 @@ def anyio_backend():
     return "asyncio"
 
 
-async def call(store, tool, **arguments):
-    async with Client(create_server(store)) as client:
+async def call(knowledge, tool, **arguments):
+    async with Client(create_server(knowledge)) as client:
         result = await client.call_tool(tool, arguments)
-    text = "\n".join(block.text for block in result.content)
-    return result.is_error, text
+    return result.is_error, "\n".join(block.text for block in result.content)
 
 
-async def test_tools_are_listed(store):
-    async with Client(create_server(store)) as client:
+async def test_tools_are_listed(knowledge):
+    async with Client(create_server(knowledge)) as client:
         tools = {tool.name: tool for tool in (await client.list_tools()).tools}
-    assert set(tools) == {
-        "search_docs",
-        "read_page",
-        "search_content",
-        "list_entries",
-        "list_docs",
-        "install_docs",
-        "remove_docs",
-    }
-    assert tools["search_docs"].annotations.read_only_hint
-    assert tools["remove_docs"].annotations.destructive_hint
-    assert "docs" in tools["search_docs"].input_schema["properties"]
+    assert set(tools) == {"search", "read", "list_files", "crawl_site", "crawl_status"}
+    assert tools["search"].annotations.read_only_hint
+    assert not tools["crawl_site"].annotations.read_only_hint
 
 
-async def test_search_then_read(store):
-    error, text = await call(store, "search_docs", query="getcwd", docs=["python"])
+async def test_search_then_read(knowledge, folder):
+    write(folder, "notes/deploy.md", "# Deploy\n\n## Rolling back\n\nUse kubectl rollout undo.\n")
+    error, text = await call(knowledge, "search", query="rollout")
     assert not error
-    assert "- os.getcwd() [os] doc=python~3.12 path=library/os#os.getcwd" in text
+    assert "- notes/deploy.md#rolling-back — Deploy › Rolling back" in text
 
-    error, text = await call(store, "read_page", doc="python~3.12", path="library/os#os.getcwd")
-    assert not error
-    assert "https://devdocs.io/python~3.12/library/os#os.getcwd" in text
-    assert "current working directory" in text
-    assert "bytestring" not in text
+    error, text = await call(knowledge, "read", path="notes/deploy.md#rolling-back")
+    assert text.startswith("path: notes/deploy.md\n(Only the #rolling-back section")
+    assert "kubectl rollout undo" in text
 
-    error, text = await call(
-        store, "read_page", doc="python", path="library/os#os.getcwd", full_page=True
-    )
-    assert "bytestring" in text
+    error, text = await call(knowledge, "read", path="nope.md")
+    assert error and "No file" in text
 
 
-async def test_read_page_in_chunks(store):
-    error, text = await call(
-        store, "read_page", doc="js", path="global_objects/array/map", max_length=1000
-    )
-    assert not error
-    assert "offset=" not in text  # the page fits
-
-    store.install("python")
-    store._connect().execute(
-        "UPDATE pages SET html = ? WHERE path = 'index'", ("<p>" + "word " * 2000 + "</p>",)
-    )
-    error, text = await call(store, "read_page", doc="python", path="index", max_length=1000)
-    assert "offset=" in text
+async def test_read_in_chunks(knowledge, folder):
+    write(folder, "long.md", "# Long\n\n" + "line of text\n" * 2000)
+    error, text = await call(knowledge, "read", path="long.md", max_length=1000)
     offset = int(text.rsplit("offset=", 1)[1].split()[0])
-    error, rest = await call(store, "read_page", doc="python", path="index", offset=offset)
-    assert not error
-    assert "word" in rest
+    error, rest = await call(knowledge, "read", path="long.md", offset=offset)
+    assert not error and "line of text" in rest
 
 
-async def test_errors_are_reported_to_the_model(store):
-    error, text = await call(store, "search_docs", query="x", docs=["no-such-doc"])
-    assert error
-    assert "No DevDocs doc matches" in text
-
-    error, text = await call(store, "read_page", doc="python", path="library/nope")
-    assert error
-    assert "No page" in text
-
-
-async def test_list_docs_install_and_remove(store):
-    error, text = await call(store, "list_docs")
-    assert "Installed (0)" in text
-    assert "JavaScript, Python" in text
-
-    error, text = await call(store, "install_docs", docs=["python", "nope"])
-    assert not error
-    assert "python~3.12: installed, 10 entries, all 5 pages offline" in text
-    assert "nope: failed" in text
-
-    error, text = await call(store, "list_docs", query="python")
-    assert "- python~3.12: Python 3.12 (release 3.12.1) [installed:" in text
-    assert "- python~2.7: Python 2.7 (release 2.7.18), 3 KB offline" in text
-
-    error, text = await call(store, "search_content", query="working directory")
-    assert "library/os" in text
-
-    error, text = await call(store, "remove_docs", docs=["python"])
-    assert "python~3.12: removed" in text
-
-
-async def test_list_entries(store):
-    error, text = await call(store, "list_entries", doc="python")
-    assert "python~3.12 has 4 sections" in text
-    assert "- os.path (2)" in text
-
-    error, text = await call(store, "list_entries", doc="python", type="os.path")
-    assert "- os.path.join() path=library/os.path#os.path.join" in text
-
-    error, text = await call(store, "list_entries", doc="python", type="nope")
+async def test_list_files(knowledge, folder):
+    error, text = await call(knowledge, "list_files")
+    assert text == "The knowledge folder is empty."
+    write(folder, "notes/a.md", "# A note\n\ntext")
+    write(folder, "notes/b.md", "# B note\n\ntext")
+    write(folder, "readme.md", "# Readme\n\ntext")
+    error, text = await call(knowledge, "list_files")
+    assert text == "(top level):\n- notes/ (2 files)\n- readme.md — Readme"
+    error, text = await call(knowledge, "list_files", folder="notes/")
+    assert "- notes/a.md — A note" in text
+    error, text = await call(knowledge, "list_files", folder="nope")
     assert error
 
 
-async def test_search_content_notes_partial_docs(store):
-    await call(store, "read_page", doc="js", path="global_objects/array/map")
-    error, text = await call(store, "search_content", query="callbackFn", docs=["js"])
-    assert "global_objects/array/map" in text
-    assert "javascript is not installed offline" in text
+async def test_crawl_tools_validate(knowledge):
+    error, text = await call(knowledge, "crawl_site", url="ftp://example.com/")
+    assert error and "Not a web page URL" in text
+    error, text = await call(knowledge, "crawl_status")
+    assert text == "No crawls have run."

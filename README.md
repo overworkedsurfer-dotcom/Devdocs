@@ -60,6 +60,19 @@ claude mcp add --transport http docshelf http://localhost:8000/mcp
 
 If Claude Desktop can't find `uv`, use its full path (`which uv`).
 
+**OpenCode:** add this to `~/.config/opencode/opencode.json`, or to `opencode.json` in a project:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "docshelf": { "type": "remote", "url": "http://localhost:8000/mcp", "oauth": false, "enabled": true }
+  }
+}
+```
+
+To have OpenCode start docshelf itself instead, run `make opencode-config` and paste what it prints. The [OpenCode guide](docs/opencode.md) covers both setups, checking the connection, and limiting what agents can do.
+
 **Cursor, VS Code and other HTTP clients:** use the URL `http://localhost:8000/mcp`.
 
 ## Using it across your network

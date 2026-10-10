@@ -47,6 +47,10 @@ crawl: ## Save a website into the folder: make crawl URL=https://docs.example.co
 reindex: ## Rebuild the search index from the folder
 	$(UV) reindex
 
+opencode-config: ## Print an OpenCode config that starts docshelf from this repo (see docs/opencode.md)
+	@uv run --quiet python -c 'import json, sys; print(json.dumps({"$$schema": "https://opencode.ai/config.json", "mcp": {"docshelf": {"type": "local", "command": [sys.argv[1], "run", "--quiet", "--directory", sys.argv[2], "docshelf"], "environment": {"DOCSHELF_DIR": sys.argv[3]}, "enabled": True, "timeout": 20000}}}, indent=2))' \
+		"$(or $(shell command -v uv),uv)" "$(CURDIR)" "$(abspath $(KNOWLEDGE))"
+
 inspector: ## Try the tools in the MCP Inspector (needs Node.js)
 	DOCSHELF_DIR="$(KNOWLEDGE)" npx @modelcontextprotocol/inspector uv run --quiet docshelf
 
@@ -105,8 +109,8 @@ clean: ## Delete the virtualenv and caches (your folder and index are untouched)
 help: ## Show this help
 	@awk 'BEGIN {FS = ":.*## "; printf "Usage: make <target> [VAR=value]\n"} \
 		/^##@/ {printf "\n\033[1m%s\033[0m\n", substr($$0, 5)} \
-		/^[a-zA-Z_-]+:.*## / {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+		/^[a-zA-Z_-]+:.*## / {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
-.PHONY: setup serve serve-http token search ls crawl reindex inspector up down \
+.PHONY: setup serve serve-http token search ls crawl reindex opencode-config inspector up down \
 	docker-build docker-run docker-stop docker-logs docker-token docker-crawl docker-stdio \
 	test lint format clean help
